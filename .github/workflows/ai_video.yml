@@ -1,22 +1,22 @@
-name: Generate AI Quran Video
+name: Gemini Quran Video Generator
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: # للتشغيل اليدوي بضغطة زر
 
 permissions:
   contents: write
 
 jobs:
-  build:
+  generate:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
+          python-version: '3.11'
 
       - name: Install Dependencies
         run: |
@@ -24,19 +24,21 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ffmpeg imagemagick
 
-      - name: Fix ImageMagick Policy
+      - name: Configure ImageMagick
         run: |
+          # فك قيود الأمان لمعالجة الصور
           sudo sed -i 's/domain="path" rights="none"/domain="path" rights="read|write"/g' /etc/ImageMagick-6/policy.xml
 
-      - name: Run Python Script
+      - name: Run Video Creator Script
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: python automate_video.py
 
-      - name: Commit and Push
+      - name: Save Video to Repository
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "Gemini-Video-Bot"
           git add shorts/
-          git commit -m "New AI Video Generated" || exit 0
+          # تنفيذ الالتزام فقط في حال وجود فيديو جديد
+          git commit -m "Generated new Quran Video via Gemini AI" || exit 0
           git push origin main
