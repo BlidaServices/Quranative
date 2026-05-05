@@ -1,0 +1,29 @@
+name: Video Transfer Bot
+
+on:
+  schedule:
+    - cron: '0 */6 * * *' # يعمل كل 6 ساعات
+  workflow_dispatch: # يسمح بالتشغيل اليدوي
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+
+    - name: Set up Python
+      uses: actions/setup-python@v2
+      with:
+        python-version: '3.9'
+
+    - name: Install dependencies
+      run: |
+        pip install telethon PyGithub
+
+    - name: Run transfer script
+      env:
+        # يفضل وضع التوكن في Secrets المستودع
+        GH_TOKEN: ${{ secrets.MY_GH_TOKEN }} 
+      run: python video_to_github.py
