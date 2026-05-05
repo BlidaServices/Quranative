@@ -6,15 +6,20 @@ from telethon.tl.types import DocumentAttributeVideo
 from github import Github
 
 async def main():
-    # قراءة البيانات من Secrets المستودع مباشرة
-    api_id = int(os.environ.get('TG_API_ID'))
+    # جلب البيانات من البيئة (عبر الـ YML)
+    api_id_env = os.environ.get('TG_API_ID')
     api_hash = os.environ.get('TG_API_HASH')
     session_string = os.environ.get('TG_SESSION')
     gh_token = os.environ.get('GH_TOKEN')
     
-    # اسم المستودع (تأكد من كتابته بشكل صحيح: username/repo)
+    # اسم مستودعك
     gh_repo = "Quranative/Quranative" 
 
+    if not api_id_env:
+        print("Error: API_ID is missing in Secrets")
+        return
+
+    api_id = int(api_id_env)
     g = Github(gh_token)
     repo = g.get_repo(gh_repo)
     
@@ -24,14 +29,13 @@ async def main():
     client = TelegramClient(StringSession(session_string), api_id, api_hash)
     await client.start()
     
-    print("بدء استخراج الفيديوهات بالترقيم...")
+    print("Starting video transfer...")
     video_number = 1
 
     async for message in client.iter_messages(source_channel, reverse=True):
         has_tag = message.text and any(tag in message.text for tag in target_hashtags)
         
         if has_tag:
-            # التحقق هل المرفق فيديو
             is_video = False
             if message.video:
                 is_video = True
@@ -42,28 +46,25 @@ async def main():
                 try:
                     file_path = await message.download_media()
                     extension = os.path.splitext(file_path)[1] or ".mp4"
-                    
-                    # الترقيم من 1 إلى الأخير
                     new_name = f"{video_number}{extension}"
                     
                     with open(file_path, 'rb') as f:
                         content = f.read()
                     
-                    git_path = f"videos/{new_name}"
-                    
+                    # الرفع لمجلد videos
                     repo.create_file(
-                        path=git_path,
-                        message=f"Upload video {new_name}",
+                        path=f"videos/{new_name}",
+                        message=f"Upload {new_name}",
                         content=content,
                         branch="main"
                     )
                     
-                    print(f"تم رفع: {new_name}")
+                    print(f"Uploaded: {new_name}")
                     video_number += 1
                     os.remove(file_path)
                     await asyncio.sleep(2)
                 except Exception as e:
-                    print(f"خطأ: {e}")
+                    print(f"Failed to upload {message.id}: {e}")
 
     await client.disconnect()
 
