@@ -1,5 +1,4 @@
 import asyncio
-import configparser
 import os
 from telethon import TelegramClient
 from telethon.sessions import StringSession
@@ -7,17 +6,15 @@ from telethon.tl.types import DocumentAttributeVideo
 from github import Github
 
 async def main():
-    config = configparser.ConfigParser()
-    config.read('/storage/emulated/0/Telegram/config.ini')
+    # قراءة البيانات من Secrets المستودع مباشرة
+    api_id = int(os.environ.get('TG_API_ID'))
+    api_hash = os.environ.get('TG_API_HASH')
+    session_string = os.environ.get('TG_SESSION')
+    gh_token = os.environ.get('GH_TOKEN')
     
-    api_id = int(config.get('Telegram', 'api_id'))
-    api_hash = config.get('Telegram', 'api_hash')
-    session_string = config.get('Telegram', 'session_string')
-    
-    # بيانات GitHub - يفضل وضعها في config.ini أو كمتغيرات بيئة
-    gh_token = "YOUR_GITHUB_TOKEN"
-    gh_repo = "username/repository"
-    
+    # اسم المستودع (تأكد من كتابته بشكل صحيح: username/repo)
+    gh_repo = "Quranative/Quranative" 
+
     g = Github(gh_token)
     repo = g.get_repo(gh_repo)
     
@@ -27,10 +24,10 @@ async def main():
     client = TelegramClient(StringSession(session_string), api_id, api_hash)
     await client.start()
     
-    print("بدء استخراج الفيديوهات والرفع إلى GitHub...")
+    print("بدء استخراج الفيديوهات بالترقيم...")
+    video_number = 1
 
     async for message in client.iter_messages(source_channel, reverse=True):
-        # التحقق من الوسم
         has_tag = message.text and any(tag in message.text for tag in target_hashtags)
         
         if has_tag:
@@ -43,33 +40,32 @@ async def main():
             
             if is_video:
                 try:
-                    print(f"جاري معالجة الفيديو: {message.id}")
-                    # تحميل الملف محلياً
                     file_path = await message.download_media()
-                    file_name = os.path.basename(file_path)
+                    extension = os.path.splitext(file_path)[1] or ".mp4"
+                    
+                    # الترقيم من 1 إلى الأخير
+                    new_name = f"{video_number}{extension}"
                     
                     with open(file_path, 'rb') as f:
                         content = f.read()
                     
-                    # الرفع للمجلد المحدد
-                    git_path = f"videos/{file_name}"
+                    git_path = f"videos/{new_name}"
                     
                     repo.create_file(
                         path=git_path,
-                        message=f"Auto-upload video {file_name}",
+                        message=f"Upload video {new_name}",
                         content=content,
                         branch="main"
                     )
                     
-                    print(f"تم الرفع بنجاح: {git_path}")
+                    print(f"تم رفع: {new_name}")
+                    video_number += 1
                     os.remove(file_path)
                     await asyncio.sleep(2)
-                    
                 except Exception as e:
-                    print(f"حدث خطأ مع الرسالة {message.id}: {e}")
+                    print(f"خطأ: {e}")
 
     await client.disconnect()
-    print("اكتملت المهمة.")
 
 if __name__ == '__main__':
     asyncio.run(main())
