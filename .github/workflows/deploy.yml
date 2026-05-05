@@ -20,9 +20,9 @@ jobs:
 
     - name: Run Script
       env:
-        # هذه المتغيرات يجب أن تكون موجودة في Settings -> Secrets في مستودعك
-        TG_API_ID: ${{ secrets.TG_API_ID }}
-        TG_API_HASH: ${{ secrets.TG_API_HASH }}
-        TG_SESSION: ${{ secrets.TG_SESSION }}
-        GH_TOKEN: ${{ secrets.MY_GITHUB_TOKEN }}
+        # قمنا بتغيير الأسماء هنا لتطابق ما وضعته أنت في Secrets حرفياً
+        TG_API_ID: ${{ secrets.API_ID }}
+        TG_API_HASH: ${{ secrets.API_HASH }}
+        TG_SESSION: ${{ secrets.SESSION_STRING }}
+        GH_TOKEN: ${{ secrets.YOUR_GITHUB_TOKEN }}
       run: python video_to_github.py
