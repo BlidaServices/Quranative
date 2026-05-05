@@ -1,10 +1,12 @@
 name: Sync Telegram Photos to GitHub
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: # تشغيل يدوي من تبويب Actions
+  schedule:
+    - cron: '0 12 * * *' # تشغيل تلقائي يومياً الساعة 12 ظهراً (اختياري)
 
 permissions:
-  contents: write  # إعطاء صلاحية الكتابة للمستودع
+  contents: write # ضروري جداً للسماح للـ Action برفع الملفات للمستودع
 
 jobs:
   build:
@@ -14,7 +16,7 @@ jobs:
     - name: Checkout Repository
       uses: actions/checkout@v4
       with:
-        token: ${{ secrets.GITHUB_TOKEN }} # استخدام التوكن الافتراضي
+        fetch-depth: 0 # لجلب تاريخ المستودع بالكامل لضمان دقة الـ Push
 
     - name: Set up Python
       uses: actions/setup-python@v4
@@ -36,11 +38,14 @@ jobs:
       run: |
         git config --local user.email "action@github.com"
         git config --local user.name "github-actions[bot]"
-        git add pictures/
-        # التأكد من وجود تغييرات قبل الالتزام
+        
+        # إضافة المجلد والملف النصي
+        git add pictures/ last_id.txt
+        
+        # التحقق من وجود تغييرات قبل تنفيذ Commit
         if git diff --quiet && git diff --staged --quiet; then
-          echo "لا توجد صور جديدة للمزامنة."
+          echo "لا توجد صور جديدة لمزامنتها حالياً."
         else
-          git commit -m "Add latest photos from Telegram"
+          git commit -m "Update: إضافة صور جديدة وتحديث آخر معرف رسالة (last_id)"
           git push origin main
         fi
