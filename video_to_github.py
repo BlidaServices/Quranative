@@ -1,71 +1,85 @@
-import asyncio
 import os
+import asyncio
 from telethon import TelegramClient
 from telethon.sessions import StringSession
 from telethon.tl.types import DocumentAttributeVideo
-from github import Github, Auth
+
+API_ID = os.environ.get('API_ID')
+API_HASH = os.environ.get('API_HASH')
+SESSION_STRING = os.environ.get('SESSION_STRING')
 
 async def main():
-    api_id_env = os.environ.get('TG_API_ID')
-    api_hash = os.environ.get('TG_API_HASH')
-    session_string = os.environ.get('TG_SESSION')
-    gh_token = os.environ.get('GH_TOKEN')
-    
-    gh_repo_name = "Quranative/Quranative" 
-
-    if not api_id_env or not gh_token:
-        print("Error: Missing environment variables.")
+    if not SESSION_STRING:
+        print("خطأ: SESSION_STRING غير موجود!")
         return
 
-    auth = Auth.Token(gh_token)
-    g = Github(auth=auth)
+    # معرف القناة المصدر
+    source_channel = 'QuranGB' 
+    save_path = 'videos'
+    id_file = 'last_video_id.txt'
     
-    try:
-        repo = g.get_repo(gh_repo_name)
-    except Exception as e:
-        print(f"Error: Could not find repository. Details: {e}")
-        return
-    
-    source_channel = 'QuranGB'
-    target_hashtags = ['#نبات', '#طبيعة']
-    
-    client = TelegramClient(StringSession(session_string), int(api_id_env), api_hash)
+    if not os.path.exists(save_path):
+        os.makedirs(save_path)
+
+    # تحديد الترقيم بناءً على الملفات الموجودة في مجلد videos
+    existing_files = [f for f in os.listdir(save_path) if f.split('.')[0].isdigit()]
+    counter = max([int(f.split('.')[0]) for f in existing_files]) + 1 if existing_files else 1
+
+    # قراءة آخر ID فيديو تمت معالجته
+    last_processed_id = 0
+    if os.path.exists(id_file):
+        with open(id_file, 'r') as f:
+            content = f.read().strip()
+            if content.isdigit():
+                last_processed_id = int(content)
+
+    client = TelegramClient(StringSession(SESSION_STRING.strip()), int(API_ID), API_HASH)
     await client.start()
-    
-    print("Starting video transfer to 'videos' folder...")
-    video_number = 1
 
-    async for message in client.iter_messages(source_channel, reverse=True):
-        has_tag = message.text and any(tag in message.text for tag in target_hashtags)
+    print(f"بدء سحب الفيديوهات. الترقيم يبدأ من: {counter}")
+
+    # جلب الرسائل التي تحتوي على ميديا (فيديوهات) من الأقدم للأحدث
+    async for message in client.iter_messages(source_channel, reverse=True, min_id=last_processed_id):
         
-        if has_tag:
-            is_video = message.video or (message.document and any(isinstance(a, DocumentAttributeVideo) for a in message.document.attributes))
+        # فحص هل الرسالة تحتوي على فيديو
+        is_video = False
+        if message.video:
+            is_video = True
+        elif message.document:
+            if any(isinstance(a, DocumentAttributeVideo) for a in message.document.attributes):
+                is_video = True
+            elif message.document.mime_type and message.document.mime_type.startswith('video/'):
+                is_video = True
+        
+        # إذا تأكدنا أنه فيديو، نقوم بتحميله
+        if is_video:
+            # محاولة جلب الامتداد الأصلي أو استخدام mp4 كافتراضي
+            ext = '.mp4'
+            if message.document and message.document.attributes:
+                for attr in message.document.attributes:
+                    if hasattr(attr, 'file_name') and attr.file_name:
+                        ext = os.path.splitext(attr.file_name)[1] or '.mp4'
+
+            filename = f"{counter}{ext}"
+            full_path = os.path.join(save_path, filename)
             
-            if is_video:
-                try:
-                    file_path = await message.download_media()
-                    extension = os.path.splitext(file_path)[1] or ".mp4"
-                    new_name = f"{video_number}{extension}"
-                    
-                    with open(file_path, 'rb') as f:
-                        content = f.read()
-                    
-                    # الرفع لمجلد videos
-                    repo.create_file(
-                        path=f"videos/{new_name}",
-                        message=f"Upload video {new_name}",
-                        content=content,
-                        branch="main"
-                    )
-                    
-                    print(f"Uploaded: {new_name}")
-                    video_number += 1
-                    os.remove(file_path)
-                    await asyncio.sleep(2)
-                except Exception as e:
-                    print(f"Failed to upload {message.id}: {e}")
+            try:
+                print(f"جاري تحميل فيديو رقم {message.id} إلى {filename}...")
+                await client.download_media(message, file=full_path)
+                
+                # حفظ الـ ID لضمان الاستمرارية في المرة القادمة
+                with open(id_file, 'w') as f:
+                    f.write(str(message.id))
+                
+                counter += 1
+                # تأخير بسيط لتجنب الحظر
+                await asyncio.sleep(1) 
+            except Exception as e:
+                print(f"خطأ في تحميل الفيديو {message.id}: {e}")
+                break
 
     await client.disconnect()
+    print(f"انتهت العملية. تم الوصول للرقم: {counter - 1}")
 
 if __name__ == '__main__':
     asyncio.run(main())
