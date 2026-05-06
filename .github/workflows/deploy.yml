@@ -9,6 +9,8 @@ jobs:
     steps:
     - name: Checkout Repository
       uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
 
     - name: Set up Python
       uses: actions/setup-python@v4
@@ -16,13 +18,20 @@ jobs:
         python-version: '3.9'
 
     - name: Install Dependencies
-      run: pip install telethon PyGithub
+      run: pip install telethon
 
     - name: Run Script
       env:
-        # قمنا بتغيير الأسماء هنا لتطابق ما وضعته أنت في Secrets حرفياً
-        TG_API_ID: ${{ secrets.API_ID }}
-        TG_API_HASH: ${{ secrets.API_HASH }}
-        TG_SESSION: ${{ secrets.SESSION_STRING }}
-        GH_TOKEN: ${{ secrets.YOUR_GITHUB_TOKEN }}
+        # تأكد أن هذه الأسماء تطابق الأسماء في Settings -> Secrets حرفياً
+        API_ID: ${{ secrets.API_ID }}
+        API_HASH: ${{ secrets.API_HASH }}
+        SESSION_STRING: ${{ secrets.SESSION_STRING }}
       run: python video_to_github.py
+
+    - name: Commit and Push changes
+      run: |
+        git config --global user.name "github-actions[bot]"
+        git config --global user.email "github-actions[bot]@users.noreply.github.com"
+        git add videos/ last_video_id.txt
+        git commit -m "Add new videos" || echo "No changes to commit"
+        git push
