@@ -3,17 +3,18 @@ import asyncio
 from telethon import TelegramClient
 from telethon.sessions import StringSession
 from telethon.tl.types import DocumentAttributeVideo
-from telethon.errors import ConnectionError
 
+# جلب البيانات من متغيرات البيئة
 API_ID = os.environ.get('API_ID')
 API_HASH = os.environ.get('API_HASH')
 SESSION_STRING = os.environ.get('SESSION_STRING')
 
 async def main():
     if not SESSION_STRING:
-        print("خطأ: SESSION_STRING غير موجود!")
+        print("خطأ: SESSION_STRING غير موجود في Secrets!")
         return
 
+    # إعداد المسارات والقناة
     source_channel = 'QuranGB'
     save_path = 'videos'
     id_file = 'last_video_id.txt'
@@ -21,9 +22,11 @@ async def main():
     if not os.path.exists(save_path):
         os.makedirs(save_path)
 
+    # حساب الترقيم بناءً على الملفات الموجودة في مجلد videos
     existing_files = [f for f in os.listdir(save_path) if f.split('.')[0].isdigit()]
     counter = max([int(f.split('.')[0]) for f in existing_files]) + 1 if existing_files else 1
 
+    # قراءة آخر ID معالج من الملف
     last_processed_id = 0
     if os.path.exists(id_file):
         with open(id_file, 'r') as f:
@@ -31,20 +34,23 @@ async def main():
             if content.isdigit():
                 last_processed_id = int(content)
 
-    # إعداد العميل مع ميزات إعادة الاتصال التلقائي
+    # إنشاء العميل مع إعدادات إعادة الاتصال التلقائي
     client = TelegramClient(
         StringSession(SESSION_STRING.strip()), 
         int(API_ID), 
         API_HASH,
-        connection_retries=15,
+        connection_retries=10,
         retry_delay=5
     )
     
     await client.start()
-    print(f"بدء سحب الفيديوهات. الترقيم من: {counter}")
+    print(f"بدء المعالجة. الترقيم يبدأ من: {counter}")
 
     try:
+        # جلب الرسائل من الأقدم للأحدث (reverse=True)
         async for message in client.iter_messages(source_channel, reverse=True, min_id=last_processed_id):
+            
+            # فحص هل الرسالة فيديو
             is_video = False
             if message.video:
                 is_video = True
@@ -55,6 +61,7 @@ async def main():
                     is_video = True
             
             if is_video:
+                # استخراج امتداد الملف
                 ext = '.mp4'
                 if message.document and message.document.attributes:
                     for attr in message.document.attributes:
@@ -65,29 +72,23 @@ async def main():
                 full_path = os.path.join(save_path, filename)
                 
                 try:
-                    print(f"جاري تحميل فيديو رقم {message.id}...")
-                    # استخدام حلقة بسيطة لإعادة المحاولة في حال قطع الاتصال أثناء التحميل
-                    for attempt in range(3):
-                        try:
-                            await client.download_media(message, file=full_path)
-                            break
-                        except (ConnectionError, Exception) as e:
-                            if attempt == 2: raise e
-                            print(f"إعادة محاولة التحميل بسبب: {e}")
-                            await asyncio.sleep(10)
-
+                    print(f"تحميل فيديو رسالة {message.id} باسم {filename}...")
+                    await client.download_media(message, file=full_path)
+                    
+                    # تحديث ملف الـ ID بعد كل عملية نجاح
                     with open(id_file, 'w') as f:
                         f.write(str(message.id))
                     
                     counter += 1
-                    # زيادة التأخير لمنع قطع الاتصال من السيرفر
-                    await asyncio.sleep(5) 
+                    # تأخير بسيط لضمان استقرار الاتصال
+                    await asyncio.sleep(1) 
                 except Exception as e:
-                    print(f"خطأ في التحميل: {e}")
+                    print(f"فشل تحميل الفيديو {message.id}: {e}")
+                    # إذا حدث خطأ كبير، نحفظ الحالة ونخرج
                     break
     finally:
         await client.disconnect()
-        print("تم قطع الاتصال.")
+        print("انتهى السكريبت.")
 
 if __name__ == '__main__':
     asyncio.run(main())
