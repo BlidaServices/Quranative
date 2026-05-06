@@ -3,8 +3,8 @@ import asyncio
 from telethon import TelegramClient
 from telethon.sessions import StringSession
 from telethon.tl.types import DocumentAttributeVideo
+from telethon.errors import ConnectionError
 
-# جلب البيانات من متغيرات البيئة التي يمررها ملف الـ YML
 API_ID = os.environ.get('API_ID')
 API_HASH = os.environ.get('API_HASH')
 SESSION_STRING = os.environ.get('SESSION_STRING')
@@ -31,47 +31,63 @@ async def main():
             if content.isdigit():
                 last_processed_id = int(content)
 
-    client = TelegramClient(StringSession(SESSION_STRING.strip()), int(API_ID), API_HASH)
+    # إعداد العميل مع ميزات إعادة الاتصال التلقائي
+    client = TelegramClient(
+        StringSession(SESSION_STRING.strip()), 
+        int(API_ID), 
+        API_HASH,
+        connection_retries=15,
+        retry_delay=5
+    )
+    
     await client.start()
+    print(f"بدء سحب الفيديوهات. الترقيم من: {counter}")
 
-    print(f"بدء سحب الفيديوهات. الترقيم يبدأ من: {counter}")
-
-    async for message in client.iter_messages(source_channel, reverse=True, min_id=last_processed_id):
-        
-        is_video = False
-        if message.video:
-            is_video = True
-        elif message.document:
-            if any(isinstance(a, DocumentAttributeVideo) for a in message.document.attributes):
+    try:
+        async for message in client.iter_messages(source_channel, reverse=True, min_id=last_processed_id):
+            is_video = False
+            if message.video:
                 is_video = True
-            elif message.document.mime_type and message.document.mime_type.startswith('video/'):
-                is_video = True
-        
-        if is_video:
-            ext = '.mp4'
-            if message.document and message.document.attributes:
-                for attr in message.document.attributes:
-                    if hasattr(attr, 'file_name') and attr.file_name:
-                        ext = os.path.splitext(attr.file_name)[1] or '.mp4'
-
-            filename = f"{counter}{ext}"
-            full_path = os.path.join(save_path, filename)
+            elif message.document:
+                if any(isinstance(a, DocumentAttributeVideo) for a in message.document.attributes):
+                    is_video = True
+                elif message.document.mime_type and message.document.mime_type.startswith('video/'):
+                    is_video = True
             
-            try:
-                print(f"جاري تحميل فيديو رقم {message.id}...")
-                await client.download_media(message, file=full_path)
-                
-                with open(id_file, 'w') as f:
-                    f.write(str(message.id))
-                
-                counter += 1
-                await asyncio.sleep(1) 
-            except Exception as e:
-                print(f"خطأ في التحميل: {e}")
-                break
+            if is_video:
+                ext = '.mp4'
+                if message.document and message.document.attributes:
+                    for attr in message.document.attributes:
+                        if hasattr(attr, 'file_name') and attr.file_name:
+                            ext = os.path.splitext(attr.file_name)[1] or '.mp4'
 
-    await client.disconnect()
-    print("انتهت العملية.")
+                filename = f"{counter}{ext}"
+                full_path = os.path.join(save_path, filename)
+                
+                try:
+                    print(f"جاري تحميل فيديو رقم {message.id}...")
+                    # استخدام حلقة بسيطة لإعادة المحاولة في حال قطع الاتصال أثناء التحميل
+                    for attempt in range(3):
+                        try:
+                            await client.download_media(message, file=full_path)
+                            break
+                        except (ConnectionError, Exception) as e:
+                            if attempt == 2: raise e
+                            print(f"إعادة محاولة التحميل بسبب: {e}")
+                            await asyncio.sleep(10)
+
+                    with open(id_file, 'w') as f:
+                        f.write(str(message.id))
+                    
+                    counter += 1
+                    # زيادة التأخير لمنع قطع الاتصال من السيرفر
+                    await asyncio.sleep(5) 
+                except Exception as e:
+                    print(f"خطأ في التحميل: {e}")
+                    break
+    finally:
+        await client.disconnect()
+        print("تم قطع الاتصال.")
 
 if __name__ == '__main__':
     asyncio.run(main())
