@@ -1,0 +1,43 @@
+name: Cleanup and Rename Videos
+
+on:
+  workflow_dispatch: # يتيح لك تشغيل الأكشن يدوياً
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Process Videos
+        run: |
+          cd videos
+          
+          # 1. حذف ملفات MOV
+          rm -f *.MOV
+          rm -f *.mov
+          
+          # 2. إنشاء مجلد مؤقت لتجنب تداخل الأسماء أثناء إعادة الترقيم
+          mkdir temp_videos
+          
+          # 3. نقل الملفات وإعادة تسميتها وترقيمها
+          # نستخدم ls -v لترتيب الملفات رقمياً (1, 2, 10 بدلاً من 1, 10, 2)
+          count=1
+          for f in $(ls -v *.mp4 *.MP4 2>/dev/null); do
+            mv "$f" "temp_videos/$count.mp4"
+            count=$((count + 1))
+          done
+          
+          # 4. مسح الملفات القديمة ونقل الجديدة من المجلد المؤقت
+          rm *.mp4 *.MP4 2>/dev/null
+          mv temp_videos/* .
+          rmdir temp_videos
+
+      - name: Commit and Push changes
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add videos/*.mp4
+          # التحقق إذا كانت هناك تغييرات قبل عمل commit
+          git diff --quiet && git diff --staged --quiet || (git commit -m "Cleanup: Rename MP4 to mp4, remove MOV, and reorder numbering" && git push)
