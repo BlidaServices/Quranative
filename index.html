@@ -1,0 +1,295 @@
+```html
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>صانع الفيديو المرئي الاحترافي</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700&family=Amiri:wght@400;700&display=swap');
+        :root { --deep-emerald: #022c22; --royal-gold: #c5a059; --soft-cream: #fdfaf3; }
+        body { font-family: 'Amiri', serif; min-height: 100vh; background: linear-gradient(135deg, #022c22 0%, #064e3b 100%); color: var(--soft-cream); margin: 0; display: flex; align-items: flex-start; justify-content: center; padding: 20px; overflow-y: auto; }
+        .main-wrapper { width: 100%; max-width: 850px; background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(15px); border: 1px solid rgba(197, 160, 89, 0.3); border-radius: 30px; padding: 25px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5); display: flex; flex-direction: column; gap: 20px; }
+        .controls-panel { background: rgba(0, 0, 0, 0.2); border-radius: 20px; padding: 20px; border: 1px solid rgba(197, 160, 89, 0.2); order: 2; }
+        .screen-container { width: 100%; position: relative; border-radius: 16px; border: 2px solid rgba(197, 160, 89, 0.2); overflow: hidden; display: flex; align-items: center; justify-content: center; order: 1; transition: all 0.5s ease; background: #000; aspect-ratio: 16/9; }
+        .canvas-wrapper { width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; position: relative; }
+        #videoCanvas { max-width: 100%; max-height: 100%; width: auto; height: auto; display: block; object-fit: contain; }
+        .ratio-grid { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 20px; justify-content: center; }
+        .ratio-item { background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(197, 160, 89, 0.2); border-radius: 12px; width: 60px; height: 60px; cursor: pointer; transition: all 0.3s ease; display: flex; align-items: center; justify-content: center; }
+        .ratio-item.active { background: rgba(197, 160, 89, 0.2); border-color: var(--royal-gold); }
+        .shape { border: 2px solid currentColor; border-radius: 2px; opacity: 0.8; }
+        .shape-16-9 { width: 30px; height: 17px; }
+        .shape-9-16 { width: 17px; height: 30px; }
+        .shape-1-1 { width: 24px; height: 24px; }
+        .btn-generate { background: linear-gradient(45deg, #c5a059, #e2c28a); color: #022c22; font-weight: 800; padding: 15px; font-size: 16px; border-radius: 12px; width: 100%; cursor: pointer; border: none; transition: all 0.3s; position: relative; overflow: hidden; }
+        .btn-generate:disabled { opacity: 0.6; cursor: not-allowed; }
+        .recording-indicator { position: absolute; top: 15px; right: 15px; display: none; align-items: center; gap: 8px; background: rgba(220, 38, 38, 0.8); padding: 5px 12px; border-radius: 20px; font-size: 12px; color: white; z-index: 50; }
+        .recording-dot { width: 8px; height: 8px; background: white; border-radius: 50%; animation: blink 1s infinite; }
+        .download-link { background: #10b981; color: white; padding: 12px; border-radius: 12px; display: none; text-align: center; text-decoration: none; font-weight: bold; margin-top: 10px; cursor: pointer; }
+        #modalOverlay { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.85); display: none; align-items: center; justify-content: center; z-index: 100; backdrop-filter: blur(8px); }
+        .modal-box { background: #022c22; border: 2px solid var(--royal-gold); border-radius: 24px; padding: 30px; width: 90%; max-width: 420px; text-align: center; }
+        .platform-option { background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(197, 160, 89, 0.3); padding: 15px; border-radius: 15px; margin: 12px 0; cursor: pointer; transition: 0.3s; display: flex; align-items: center; justify-content: center; gap: 12px; font-weight: bold; }
+        .progress-bar { position: absolute; bottom: 0; left: 0; height: 4px; background: rgba(255,255,255,0.3); width: 0%; transition: width 0.3s; }
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+    </style>
+</head>
+<body>
+    <div id="modalOverlay">
+        <div class="modal-box">
+            <h2 class="text-xl font-bold mb-4" style="color: var(--royal-gold)">اختر المنصة والترميز</h2>
+            <div class="platform-option" onclick="processWithPlatform('tiktok')">
+                <i class="fab fa-tiktok"></i> تيك توك (MP4)
+            </div>
+            <div class="platform-option" onclick="processWithPlatform('others')">
+                <i class="fab fa-instagram"></i> <i class="fab fa-youtube ml-2"></i> انستغرام / يوتيوب (WebM)
+            </div>
+            <button onclick="closeModal()" class="mt-4 text-xs text-gray-400 underline">إلغاء</button>
+        </div>
+    </div>
+
+    <div class="main-wrapper">
+        <div class="screen-container" id="container">
+            <div id="recIndicator" class="recording-indicator">
+                <div class="recording-dot"></div>
+                جاري التسجيل...
+            </div>
+            <div class="canvas-wrapper">
+                <canvas id="videoCanvas"></canvas>
+            </div>
+        </div>
+
+        <div class="controls-panel">
+            <div id="uploadBox" class="mb-6 flex flex-col items-center justify-center border-2 border-dashed border-slate-600 rounded-xl p-8 hover:border-blue-500 transition-colors cursor-pointer" onclick="document.getElementById('audioInput').click()">
+                <i class="fas fa-file-audio text-4xl mb-3 text-blue-400"></i>
+                <span id="fileName" class="text-lg text-slate-300">ارفع ملف الصوت للبدء</span>
+                <input type="file" id="audioInput" accept="audio/*" class="hidden" onchange="handleAudio(event)">
+            </div>
+
+            <div class="ratio-grid" id="ratioContainer">
+                <div class="ratio-item active" data-ratio="16/9"><div class="shape shape-16-9"></div></div>
+                <div class="ratio-item" data-ratio="9/16"><div class="shape shape-9-16"></div></div>
+                <div class="ratio-item" data-ratio="1/1"><div class="shape shape-1-1"></div></div>
+            </div>
+            
+            <button id="startBtn" class="btn-generate" disabled>
+                <i class="fas fa-magic ml-2"></i>
+                <span id="btnText">بانتظار الملف الصوتي</span>
+                <div id="loadingProgress" class="progress-bar"></div>
+            </button>
+
+            <div id="downloadBtn" class="download-link">
+                <i class="fas fa-download ml-2"></i> تحميل المقطع النهائي
+            </div>
+        </div>
+    </div>
+
+    <audio id="audioPlayer"></audio>
+
+    <script>
+        const config = {
+            base: "https://raw.githubusercontent.com/BlidaServices/Quranative/refs/heads/main/pictures/",
+            totalImages: 271,
+            slideDuration: 7000,
+            fadeDuration: 1500
+        };
+
+        const canvas = document.getElementById('videoCanvas');
+        const ctx = canvas.getContext('2d');
+        const audio = document.getElementById('audioPlayer');
+        const startBtn = document.getElementById('startBtn');
+        const downloadBtn = document.getElementById('downloadBtn');
+        const recIndicator = document.getElementById('recIndicator');
+        const modalOverlay = document.getElementById('modalOverlay');
+        const loadingProgress = document.getElementById('loadingProgress');
+
+        let currentRatio = "16/9";
+        let mediaRecorder;
+        let recordedChunks = [];
+        let isRecording = false;
+        let activePlatform = 'others';
+        let finalBlob = null;
+        let cachedImages = new Map();
+        let randomSequence = [];
+
+        function updateCanvasSize() {
+            if (currentRatio === "16/9") { canvas.width = 1280; canvas.height = 720; }
+            else if (currentRatio === "9/16") { canvas.width = 720; canvas.height = 1280; }
+            else if (currentRatio === "1/1") { canvas.width = 1080; canvas.height = 1080; }
+            document.getElementById('container').style.aspectRatio = currentRatio;
+        }
+
+        async function preloadAllImages(sequence) {
+            startBtn.disabled = true;
+            let loaded = 0;
+            const uniqueIds = [...new Set(sequence)];
+            
+            for (const id of uniqueIds) {
+                if (!cachedImages.has(id)) {
+                    await new Promise((resolve) => {
+                        const img = new Image();
+                        img.crossOrigin = "anonymous";
+                        img.src = `${config.base}${id}.jpg`;
+                        img.onload = () => {
+                            cachedImages.set(id, img);
+                            loaded++;
+                            loadingProgress.style.width = `${(loaded / uniqueIds.length) * 100}%`;
+                            resolve();
+                        };
+                        img.onerror = () => {
+                            loaded++;
+                            resolve();
+                        };
+                    });
+                } else {
+                    loaded++;
+                    loadingProgress.style.width = `${(loaded / uniqueIds.length) * 100}%`;
+                }
+            }
+            startBtn.disabled = false;
+            document.getElementById('btnText').textContent = "جاهز للتوليد";
+            loadingProgress.style.width = "0%";
+        }
+
+        function handleAudio(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const url = URL.createObjectURL(file);
+                audio.src = url;
+                document.getElementById('fileName').textContent = file.name;
+                
+                audio.onloadedmetadata = () => {
+                    const duration = audio.duration * 1000;
+                    const requiredSlides = Math.ceil(duration / config.slideDuration) + 2;
+                    randomSequence = [];
+                    for(let i=0; i<requiredSlides; i++) {
+                        randomSequence.push(Math.floor(Math.random() * config.totalImages) + 1);
+                    }
+                    document.getElementById('btnText').textContent = "جاري تحميل الصور...";
+                    preloadAllImages(randomSequence);
+                };
+            }
+        }
+
+        function getKenBurnsEffect(progress, type, img) {
+            const baseScale = Math.max(canvas.width / img.width, canvas.height / img.height);
+            let scale, tx = 0, ty = 0;
+            const phase = type % 3;
+
+            if (phase === 0) { 
+                scale = baseScale * (1 + progress * 0.2);
+                tx = progress * 40; ty = progress * 30;
+            } else if (phase === 1) {
+                scale = baseScale * (1.2 - progress * 0.2);
+                tx = -progress * 40; ty = -progress * 30;
+            } else {
+                scale = baseScale * 1.15;
+                tx = (progress - 0.5) * 60; ty = (0.5 - progress) * 40;
+            }
+            return { scale, tx, ty };
+        }
+
+        function drawLayer(img, progress, type, alpha) {
+            if (!img) return;
+            const t = getKenBurnsEffect(progress, type, img);
+            ctx.save();
+            ctx.globalAlpha = alpha;
+            ctx.translate(canvas.width/2 + t.tx, canvas.height/2 + t.ty);
+            ctx.scale(t.scale, t.scale);
+            ctx.drawImage(img, -img.width/2, -img.height/2);
+            ctx.restore();
+        }
+
+        function renderFrame() {
+            if (!isRecording) return;
+            
+            const time = audio.currentTime * 1000;
+            const idx = Math.floor(time / config.slideDuration);
+            const slideTime = time % config.slideDuration;
+            
+            const img1 = cachedImages.get(randomSequence[idx]);
+            const img2 = cachedImages.get(randomSequence[idx + 1]);
+
+            ctx.fillStyle = "#000";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            if (slideTime > config.slideDuration - config.fadeDuration) {
+                const fade = (slideTime - (config.slideDuration - config.fadeDuration)) / config.fadeDuration;
+                const easeFade = fade < 0.5 ? 2 * fade * fade : 1 - Math.pow(-2 * fade + 2, 2) / 2;
+                
+                if (img1) drawLayer(img1, slideTime / config.slideDuration, idx, 1 - easeFade);
+                if (img2) drawLayer(img2, (slideTime - config.slideDuration) / config.slideDuration, idx + 1, easeFade);
+                else if (img1) drawLayer(img1, slideTime / config.slideDuration, idx, 1);
+            } else {
+                if (img1) drawLayer(img1, slideTime / config.slideDuration, idx, 1);
+            }
+
+            requestAnimationFrame(renderFrame);
+        }
+
+        startBtn.onclick = () => modalOverlay.style.display = 'flex';
+        function closeModal() { modalOverlay.style.display = 'none'; }
+
+        async function processWithPlatform(platform) {
+            activePlatform = platform;
+            closeModal();
+            isRecording = true;
+            recordedChunks = [];
+            
+            const stream = canvas.captureStream(30);
+            const aCtx = new AudioContext();
+            const source = aCtx.createMediaElementSource(audio);
+            const dest = aCtx.createMediaStreamDestination();
+            source.connect(dest); source.connect(aCtx.destination);
+            const combined = new MediaStream([...stream.getVideoTracks(), ...dest.stream.getAudioTracks()]);
+            
+            let mime = activePlatform === 'tiktok' ? 'video/mp4;codecs=avc1.42E01E,mp4a.40.2' : 'video/webm;codecs=vp9,opus';
+            if (!MediaRecorder.isTypeSupported(mime)) mime = activePlatform === 'tiktok' ? 'video/mp4' : 'video/webm';
+            if (!MediaRecorder.isTypeSupported(mime)) mime = 'video/webm';
+
+            mediaRecorder = new MediaRecorder(combined, { mimeType: mime, videoBitsPerSecond: 15000000 });
+            mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
+            mediaRecorder.onstop = () => {
+                finalBlob = new Blob(recordedChunks, { type: mime.split(';')[0] });
+                downloadBtn.style.display = "block";
+                recIndicator.style.display = "none";
+                startBtn.disabled = false;
+                isRecording = false;
+                audio.pause();
+                audio.currentTime = 0;
+            };
+
+            audio.currentTime = 0;
+            audio.play();
+            mediaRecorder.start(100);
+            recIndicator.style.display = "flex";
+            startBtn.disabled = true;
+            renderFrame();
+        }
+
+        audio.onended = () => { if (mediaRecorder?.state === "recording") mediaRecorder.stop(); };
+        downloadBtn.onclick = () => {
+            const url = URL.createObjectURL(finalBlob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `Quran_Video_${Date.now()}.${activePlatform === 'tiktok' ? 'mp4' : 'webm'}`;
+            a.click();
+        };
+
+        document.querySelectorAll('.ratio-item').forEach(item => {
+            item.onclick = () => {
+                if (isRecording) return;
+                document.querySelector('.ratio-item.active').classList.remove('active');
+                item.classList.add('active');
+                currentRatio = item.dataset.ratio;
+                updateCanvasSize();
+            };
+        });
+
+        updateCanvasSize();
+    </script>
+</body>
+</html>
+
+```
